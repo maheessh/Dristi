@@ -52,7 +52,8 @@ Ensure you have the following installed:
 git clone https://github.com/yourusername/dristhi.git
 cd dristhi
 
-📦 Install Dependencies
+```
+### **📦 Install Dependencies
 bash
 Copy
 Edit
