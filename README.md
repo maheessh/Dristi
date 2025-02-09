@@ -1,4 +1,4 @@
-# 🛍️ Dristhi - Smart Assistive Bag  
+# 🛍️ Dristi - Smart Assistive Bag  
 🚀 **Empowering visually impaired individuals with AI-powered navigation, real-time object detection, health monitoring, and emergency response.**  
 
 ---
