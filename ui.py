@@ -1,142 +1,123 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk
 import threading
-from bluetooth_service import BluetoothService
-from speech_service import SpeechService
+import cv2
+from PIL import Image, ImageTk
 from tts_service import TextToSpeechService
+from hardware_data import HardwareMonitor
 
-class BluetoothApp:
+
+class DristhiApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Dristhi - Assistive Wearable App")
-        self.root.geometry("600x700")  # Improved Window Size
-        self.root.configure(bg="#1E1E1E")  # Dark Background for Modern UI
+        self.root.geometry("900x700")
+        self.root.configure(bg="#1E1E1E")
 
-        # Initialize Services
-        self.bluetooth_service = BluetoothService()
         self.tts_service = TextToSpeechService()
-        self.speech_service = SpeechService(self.on_wake_word_detected, self.bluetooth_service)
 
-        # Title Label
-        self.label = tk.Label(
-            root,
+        self.notebook = ttk.Notebook(root)
+        self.home_tab = ttk.Frame(self.notebook)
+        self.health_tab = ttk.Frame(self.notebook)
+
+        self.notebook.add(self.home_tab, text="Home")
+        self.notebook.add(self.health_tab, text="Health")
+        self.notebook.pack(expand=True, fill="both")
+
+        self.setup_home_tab()
+        self.setup_health_tab()
+
+        self.object_detection_callback = None
+        self.audio_enabled = True
+
+        # OpenCV Camera Feed
+        self.cap = cv2.VideoCapture(0)
+        self.update_camera_feed()
+
+    def setup_home_tab(self):
+        """Setup UI elements for the Home tab."""
+        label = tk.Label(
+            self.home_tab,
             text="Dristhi - Assistive Wearable",
             font=("Arial", 20, "bold"),
             fg="white",
             bg="#1E1E1E"
         )
-        self.label.pack(pady=15)
+        label.pack(pady=15)
 
-        # Bluetooth Control Frame
-        self.control_frame = tk.Frame(root, bg="#1E1E1E")
-        self.control_frame.pack(pady=10, padx=20, fill=tk.X)
+        control_frame = tk.Frame(self.home_tab, bg="#1E1E1E")
+        control_frame.pack(pady=10, padx=20, fill=tk.X)
 
-        # Bluetooth Scan Button
-        self.scan_button = tk.Button(
-            self.control_frame,
-            text="Scan Bluetooth Devices",
-            command=self.scan_bluetooth,
+        self.toggle_audio_button = tk.Button(
+            control_frame,
+            text="Toggle Audio (ON)",
+            command=self.toggle_audio,
             font=("Arial", 12, "bold"),
-            bg="#007BFF",
+            bg="#28A745",
             fg="white",
             relief="raised",
             bd=3
         )
-        self.scan_button.pack(pady=10, fill=tk.X)
+        self.toggle_audio_button.pack(pady=10, fill=tk.X)
 
-        # Device List with Scrollbar
-        self.list_frame = tk.Frame(root, bg="#1E1E1E")
-        self.list_frame.pack(pady=10, padx=20, fill=tk.BOTH, expand=True)
-
-        self.device_listbox = tk.Listbox(
-            self.list_frame,
-            width=50,
-            height=10,
-            font=("Arial", 12),
-            bg="#2C2C2C",
-            fg="white",
-            selectbackground="#007BFF",
-            selectforeground="white",
-            relief="flat",
-            highlightthickness=2,
-            highlightbackground="#007BFF"
-        )
-        self.device_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        self.scrollbar = ttk.Scrollbar(self.list_frame, orient=tk.VERTICAL, command=self.device_listbox.yview)
-        self.device_listbox.configure(yscrollcommand=self.scrollbar.set)
-        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        # Connect Button
-        self.connect_button = tk.Button(
-            self.control_frame,
-            text="Connect to Device",
-            command=self.connect_bluetooth,
+        camera_button = tk.Button(
+            control_frame,
+            text="Start Object & Face Detection",
+            command=self.start_object_detection,
             font=("Arial", 12, "bold"),
-            bg="#007BFF",
+            bg="#FF5733",
             fg="white",
             relief="raised",
             bd=3
         )
-        self.connect_button.pack(pady=10, fill=tk.X)
+        camera_button.pack(pady=10, fill=tk.X)
 
-        # Status Label
-        self.status_label = tk.Label(
-            root,
-            text="Status: Waiting for connection...",
-            font=("Arial", 12, "italic"),
-            fg="#BDC3C7",
-            bg="#1E1E1E"
-        )
-        self.status_label.pack(pady=10)
+        self.camera_feed_label = tk.Label(self.home_tab)
+        self.camera_feed_label.pack(pady=20)
 
-        # Listening Label
         self.speech_label = tk.Label(
-            root,
-            text="Listening for wake word...",
-            font=("Arial", 12, "italic"),
+            self.home_tab,
+            text="Detected: None",
+            font=("Arial", 12),
             fg="#00A8E8",
             bg="#1E1E1E"
         )
         self.speech_label.pack(pady=10)
 
-        # Devices & Connection Storage
-        self.devices = []
-        self.connected_device = None
+    def setup_health_tab(self):
+        """Setup UI elements for the Health tab (Hardware Data)."""
+        self.hardware_monitor = HardwareMonitor(self.health_tab)
 
-    def scan_bluetooth(self):
-        """Scan for Bluetooth devices and update the UI."""
-        self.device_listbox.delete(0, tk.END)
-        self.bluetooth_service.scan(self.update_device_list)
+    def toggle_audio(self):
+        """Toggle audio announcements for object detection."""
+        self.audio_enabled = not self.audio_enabled
+        self.toggle_audio_button.config(text=f"Toggle Audio ({'ON' if self.audio_enabled else 'OFF'})")
 
-    def update_device_list(self, devices):
-        """Update the list box with scanned Bluetooth device names."""
-        self.device_listbox.delete(0, tk.END)
-        self.devices = devices  # Store for later reference
-        for name in devices:
-            self.device_listbox.insert(tk.END, name)
+    def update_camera_display(self, detected_text, distance=None):
+        """Update UI with detected objects and handle optional distance."""
+        display_text = f"Objects: {detected_text if detected_text else 'None'}"
+    
+        # ✅ Only add distance if it is not None
+        if distance is not None:
+            display_text += f", Distance: {distance:.2f} cm"
 
-    def connect_bluetooth(self):
-        """Connect to a selected Bluetooth device."""
-        selected_index = self.device_listbox.curselection()
-        if selected_index:
-            device_name = self.devices[selected_index[0]]
-            if self.bluetooth_service.connect_to_device(device_name):
-                self.status_label.config(text=f"Connected to {device_name}")
-                messagebox.showinfo("Bluetooth", f"Connected to {device_name}")
-            else:
-                messagebox.showerror("Bluetooth", f"Could not connect to {device_name}")
+        self.speech_label.config(text=display_text)
 
-    def on_wake_word_detected(self):
-        """Trigger voice response and restart wake word detection."""
-        self.speech_label.config(text="Wake word detected! Responding...")
-        self.tts_service.speak("Hi, how can I help you?")
+    def update_camera_feed(self):
+        """Continuously capture frames from OpenCV and display in Tkinter UI."""
+        ret, frame = self.cap.read()
+        if ret:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame = cv2.resize(frame, (400, 300))
+            img = ImageTk.PhotoImage(image=Image.fromarray(frame))
+            self.camera_feed_label.config(image=img)
+            self.camera_feed_label.image = img
 
-        # Restart wake word detection
-        threading.Thread(target=self.speech_service.listen_for_wake_word, daemon=True).start()
+        self.root.after(500, self.update_camera_feed)
 
-# Launch Application
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = BluetoothApp(root)
-    root.mainloop()
+    def set_object_detection_callback(self, callback):
+        self.object_detection_callback = callback
+
+    def start_object_detection(self):
+        if self.object_detection_callback:
+            self.object_detection_callback()

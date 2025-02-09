@@ -2,12 +2,11 @@ import speech_recognition as sr
 import threading
 
 class SpeechService:
-    def __init__(self, on_wake_word_detected, bluetooth_service):
+    def __init__(self, on_wake_word_detected):
         self.speech_recognizer = sr.Recognizer()
         self.speech_recognizer.energy_threshold = 300  # Adjust for better detection
         self.speech_recognizer.dynamic_energy_threshold = True  # Auto-adjusts based on noise
         self.on_wake_word_detected = on_wake_word_detected
-        self.bluetooth_service = bluetooth_service  # Handles Bluetooth connections
         self.is_listening_for_command = False  # Prevents duplicate wake word activations
 
         # Start listening for wake word in the background
@@ -49,13 +48,6 @@ class SpeechService:
 
                 command = self.speech_recognizer.recognize_google(audio).lower().strip()
                 print(f"Command recognized: {command}")
-
-                if "connect to" in command:
-                    device_name = command.replace("connect to", "").strip()
-                    if self.bluetooth_service.connect_to_device(device_name):
-                        print(f"Connected to {device_name}")
-                    else:
-                        print(f"Could not connect to {device_name}")
 
         except sr.UnknownValueError:
             print("Could not understand. Try again.")
