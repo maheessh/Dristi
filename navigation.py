@@ -7,7 +7,7 @@ import re
 from geopy.distance import geodesic
 
 # ✅ Set up Google Maps API Key
-GOOGLE_MAPS_API_KEY = "REMOVED_SECRET"  # 🔹 Replace with your API key
+GOOGLE_MAPS_API_KEY = "GOOGLE MAPS API KEY"  # 🔹 Replace with your API key
 gmaps = googlemaps.Client(key=GOOGLE_MAPS_API_KEY)
 
 # ✅ Initialize Text-to-Speech Engine
